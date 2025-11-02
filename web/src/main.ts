@@ -8,6 +8,7 @@ const {
   input,
   select,
   option,
+  optgroup,
   button,
   a,
   label,
@@ -64,7 +65,19 @@ const showProgress = state(false)
 const showDownload = state(false)
 const showError = state(false)
 
+// Branch/tag state
+const branches = state<string[]>([])
+const tags = state<string[]>([])
+const selectedRefType = state<'dropdown' | 'custom'>('dropdown')
+const customRef = state('')
+const validationStatus = state<{
+  valid: boolean
+  type?: string
+  error?: string
+} | null>(null)
+
 let eventSource: EventSource | null = null
+let validationTimeout: ReturnType<typeof setTimeout> | null = null
 
 const statusClass = derive(() => {
   const status = buildStatus.val
@@ -74,6 +87,76 @@ const statusClass = derive(() => {
 const statusDisplay = derive(() => {
   return buildStatus.val || ''
 })
+
+// Load firmware data on startup
+async function loadFirmwareData() {
+  try {
+    const [branchesRes, tagsRes, latestTagRes] = await Promise.all([
+      fetch(`${API_URL}/firmware/branches`),
+      fetch(`${API_URL}/firmware/tags`),
+      fetch(`${API_URL}/firmware/latest-tag`),
+    ])
+
+    if (branchesRes.ok) {
+      branches.val = await branchesRes.json()
+    }
+    if (tagsRes.ok) {
+      tags.val = await tagsRes.json()
+    }
+    if (latestTagRes.ok) {
+      const { tag } = await latestTagRes.json()
+      if (tag) {
+        branch.val = tag
+      }
+    }
+  } catch (error) {
+    console.error('Error loading firmware data:', error)
+  }
+}
+
+// Get the current branch value (either from dropdown or custom input)
+const currentBranch = derive(() => {
+  if (selectedRefType.val === 'custom') {
+    return customRef.val
+  }
+  return branch.val
+})
+
+// Validate branch/tag/commit
+async function validateCustomRef(value: string) {
+  if (!value.trim()) {
+    validationStatus.val = null
+    return
+  }
+
+  // Clear previous timeout
+  if (validationTimeout) {
+    clearTimeout(validationTimeout)
+  }
+
+  // Debounce validation
+  validationTimeout = setTimeout(async () => {
+    try {
+      const response = await fetch(`${API_URL}/firmware/validate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ref: value }),
+      })
+
+      if (response.ok) {
+        validationStatus.val = await response.json()
+      } else {
+        validationStatus.val = { valid: false, error: 'Validation failed' }
+      }
+    } catch (error) {
+      console.error('Validation error:', error)
+      validationStatus.val = { valid: false, error: 'Could not validate' }
+    }
+  }, 500)
+}
+
+// Initialize on load
+loadFirmwareData()
 
 function connectSSE(jobId: string): void {
   if (eventSource) {
@@ -140,7 +223,7 @@ async function handleSubmit(e: Event): Promise<void> {
   downloadUrl.val = ''
 
   const config = {
-    branch: branch.val.trim(),
+    branch: currentBranch.val.trim(),
     environment: environment.val,
   }
 
@@ -187,17 +270,91 @@ const App = () =>
       { onsubmit: handleSubmit },
       label(
         'Branch/Tag/Commit',
-        input({
-          type: 'text',
-          value: branch,
-          oninput: (e: Event) => {
-            const target = e.target as HTMLInputElement
-            branch.val = target.value
-          },
-          placeholder: 'master',
-          required: true,
-        }),
-        small('Git branch, tag, or commit hash to build from')
+        () =>
+          selectedRefType.val === 'dropdown'
+            ? select(
+                {
+                  value: branch,
+                  onchange: (e: Event) => {
+                    const target = e.target as HTMLSelectElement
+                    const value = target.value
+                    if (value === '__custom__') {
+                      selectedRefType.val = 'custom'
+                      customRef.val = ''
+                      validationStatus.val = null
+                    } else {
+                      branch.val = value
+                    }
+                  },
+                },
+                option({ value: '' }, 'Select a branch or tag...'),
+                tags.val.length > 0
+                  ? optgroup(
+                      { label: 'Tags' },
+                      ...tags.val.map((tag) =>
+                        option({ value: tag }, `🏷️ ${tag}`)
+                      )
+                    )
+                  : null,
+                branches.val.length > 0
+                  ? optgroup(
+                      { label: 'Branches' },
+                      ...branches.val.map((branchName) =>
+                        option({ value: branchName }, `🌿 ${branchName}`)
+                      )
+                    )
+                  : null,
+                option({ value: '__custom__' }, '➕ Custom (type your own)')
+              )
+            : div(
+                {},
+                input({
+                  type: 'text',
+                  value: customRef,
+                  oninput: (e: Event) => {
+                    const target = e.target as HTMLInputElement
+                    customRef.val = target.value
+                    validateCustomRef(target.value)
+                  },
+                  placeholder: 'Enter branch name, tag, or commit hash...',
+                  required: true,
+                  style: `width: 100%; margin-bottom: 0.5rem; ${
+                    validationStatus.val && !validationStatus.val.valid
+                      ? 'border-color: #ff4444;'
+                      : validationStatus.val && validationStatus.val.valid
+                      ? 'border-color: #00ff00;'
+                      : ''
+                  }`,
+                }),
+                button(
+                  {
+                    type: 'button',
+                    onclick: () => {
+                      selectedRefType.val = 'dropdown'
+                      customRef.val = ''
+                      validationStatus.val = null
+                    },
+                    style: 'width: 100%;',
+                  },
+                  '← Back to dropdown'
+                )
+              ),
+        () =>
+          selectedRefType.val === 'custom'
+            ? validationStatus.val
+              ? validationStatus.val.valid
+                ? small(
+                    { style: 'color: #00ff00;' },
+                    `✓ Valid ${validationStatus.val.type || 'reference'}`
+                  )
+                : small(
+                    { style: 'color: #ff4444;' },
+                    `✗ ${validationStatus.val.error || 'Invalid reference'}`
+                  )
+              : small('Enter a branch name, tag, or commit hash (7+ hex chars)')
+            : small(
+                'Select from the dropdown, or choose "Custom" to type your own'
+              )
       ),
       label(
         'Build Environment',
