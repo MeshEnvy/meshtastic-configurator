@@ -13,6 +13,7 @@ const {
   a,
   label,
   small,
+  strong,
   h1,
   h2,
   h3,
@@ -393,7 +394,7 @@ const App = () =>
                   },
                   placeholder: 'Enter branch name, tag, or commit hash...',
                   required: true,
-                  style: `width: 100%; margin-bottom: 0.5rem; ${
+                  style: `${
                     validationStatus.val && !validationStatus.val.valid
                       ? 'border-color: #ff4444;'
                       : validationStatus.val && validationStatus.val.valid
@@ -409,7 +410,6 @@ const App = () =>
                       customRef.val = ''
                       validationStatus.val = null
                     },
-                    style: 'width: 100%;',
                   },
                   '← Back to dropdown'
                 )
@@ -481,12 +481,7 @@ const App = () =>
             const optionState = configOptionStates.get(option.key)
             if (!optionState) return null
             return div(
-              { style: 'margin-bottom: 1rem;' },
               label(
-                {
-                  style:
-                    'display: flex; align-items: center; gap: 0.5rem; cursor: pointer;',
-                },
                 input({
                   type: 'checkbox',
                   checked: optionState,
@@ -504,14 +499,12 @@ const App = () =>
                     }
                   },
                 }),
-                span(
-                  { style: 'font-weight: bold;' },
+                strong(
                   option.name,
                   option.description
                     ? small(
                         {
-                          style:
-                            'display: block; font-weight: normal; opacity: 0.7;',
+                          style: 'opacity: 0.7;',
                         },
                         option.description
                       )
@@ -562,7 +555,7 @@ const App = () =>
             return div(
               {
                 style:
-                  'margin-bottom: 1rem; border: 1px solid #ddd; padding: 0.5rem; border-radius: 4px;',
+                  'border: 1px solid #ddd; padding: 0.5rem; border-radius: 4px;',
               },
               button(
                 {
@@ -571,7 +564,7 @@ const App = () =>
                     shownState.val = !shownState.val
                   },
                   style:
-                    'width: 100%; text-align: left; background: none; border: none; padding: 0.5rem; cursor: pointer; font-weight: bold;',
+                    'text-align: left; background: none; border: none; padding: 0.5rem; cursor: pointer; font-weight: bold;',
                 },
                 () => (shownState.val ? '▼ ' : '▶ ') + categoryTitles[category]
               ),
@@ -594,10 +587,6 @@ const App = () =>
                       const optionState = configOptionStates.get(option.key)
                       if (!optionState) return null
                       return label(
-                        {
-                          style:
-                            'display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; cursor: pointer;',
-                        },
                         input({
                           type: 'checkbox',
                           checked: optionState,
@@ -616,7 +605,7 @@ const App = () =>
                             }
                           },
                         }),
-                        span({ style: 'font-weight: bold;' }, option.name)
+                        strong(option.name)
                       )
                     })
                     .filter((el) => el !== null)
@@ -632,10 +621,6 @@ const App = () =>
                     const optionState = configOptionStates.get(option.key)
                     if (!optionState) return null
                     return label(
-                      {
-                        style:
-                          'display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; cursor: pointer;',
-                      },
                       input({
                         type: 'checkbox',
                         checked: optionState,
@@ -650,8 +635,7 @@ const App = () =>
                         option.description
                           ? small(
                               {
-                                style:
-                                  'display: block; font-weight: normal; opacity: 0.7; font-size: 0.9em; margin-left: 1.5rem;',
+                                style: 'opacity: 0.7;',
                               },
                               option.description
                             )
@@ -663,10 +647,7 @@ const App = () =>
 
                 elements.push(...regularOptions)
 
-                return div(
-                  { style: 'margin-top: 0.5rem; padding-left: 1rem;' },
-                  ...elements
-                )
+                return div(...elements)
               }
             )
           })
