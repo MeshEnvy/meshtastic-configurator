@@ -2,6 +2,7 @@ import { jobManager } from './jobs'
 import { BuildConfig } from './types'
 import { readdirSync } from 'fs'
 import { join } from 'path'
+import { startFirmwarePuller } from './firmware-puller'
 
 const PORT = (Bun.env.PORT ? parseInt(Bun.env.PORT) : undefined) || 3000
 
@@ -159,3 +160,6 @@ const server = Bun.serve({
 })
 
 console.log(`Server running on http://localhost:${PORT}`)
+
+// Start firmware puller to update repository every hour
+startFirmwarePuller()
