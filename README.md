@@ -90,6 +90,7 @@ bun --serve index.html
 ```
 
 The frontend automatically detects the API URL based on the environment:
+
 - In development (localhost/127.0.0.1): Uses `http://localhost:3000`
 - In production: Uses `https://configurator-api.meshenvy.org`
 
@@ -125,6 +126,7 @@ Build configurations are specified as JSON with the following structure:
 ## API Endpoints
 
 ### Firmware Information
+
 - `GET /firmware/branches` - Get list of available branches
 - `GET /firmware/tags` - Get list of available tags
 - `GET /firmware/latest-tag` - Get the latest tag
@@ -132,6 +134,7 @@ Build configurations are specified as JSON with the following structure:
 - `GET /firmware/environments` - Get list of available build environments
 
 ### Build Management
+
 - `POST /build` - Submit a build request
 - `GET /build/:id` - Get build job status
 - `GET /build/:id/progress` - SSE endpoint for build progress

@@ -65,6 +65,11 @@ const showProgress = state(false)
 const showDownload = state(false)
 const showError = state(false)
 
+// Configuration option states will be created dynamically
+
+// Category visibility states (will be initialized when config options load)
+const categoryShown = new Map<string, ReturnType<typeof state<boolean>>>()
+
 // Branch/tag state
 const branches = state<string[]>([])
 const tags = state<string[]>([])
@@ -76,6 +81,18 @@ const validationStatus = state<{
   type?: string
   error?: string
 } | null>(null)
+
+// Configuration options from API
+interface ConfigOption {
+  key: string
+  name: string
+  description?: string
+  category: 'feature' | 'system' | 'module'
+  hierarchical?: boolean
+  implies?: string[]
+}
+const configOptions = state<ConfigOption[]>([])
+const configOptionStates = new Map<string, ReturnType<typeof state<boolean>>>()
 
 let eventSource: EventSource | null = null
 let validationTimeout: ReturnType<typeof setTimeout> | null = null
@@ -89,16 +106,22 @@ const statusDisplay = derive(() => {
   return buildStatus.val || ''
 })
 
-// Load firmware data on startup
+// Load firmware data and config options on startup
 async function loadFirmwareData() {
   try {
-    const [branchesRes, tagsRes, latestTagRes, environmentsRes] =
-      await Promise.all([
-        fetch(`${API_URL}/firmware/branches`),
-        fetch(`${API_URL}/firmware/tags`),
-        fetch(`${API_URL}/firmware/latest-tag`),
-        fetch(`${API_URL}/firmware/environments`),
-      ])
+    const [
+      branchesRes,
+      tagsRes,
+      latestTagRes,
+      environmentsRes,
+      configOptionsRes,
+    ] = await Promise.all([
+      fetch(`${API_URL}/firmware/branches`),
+      fetch(`${API_URL}/firmware/tags`),
+      fetch(`${API_URL}/firmware/latest-tag`),
+      fetch(`${API_URL}/firmware/environments`),
+      fetch(`${API_URL}/config/options`),
+    ])
 
     if (branchesRes.ok) {
       branches.val = await branchesRes.json()
@@ -122,6 +145,30 @@ async function loadFirmwareData() {
           environment.val = envs[0]
         }
       }
+    }
+    if (configOptionsRes.ok) {
+      const options: ConfigOption[] = await configOptionsRes.json()
+      console.log('Loaded config options:', options.length, options)
+
+      // Initialize state for each config option BEFORE setting configOptions.val
+      // This ensures states exist when reactive functions run
+      options.forEach((option) => {
+        if (!configOptionStates.has(option.key)) {
+          configOptionStates.set(option.key, state(false))
+        }
+        // Initialize category visibility states
+        if (!categoryShown.has(option.category)) {
+          categoryShown.set(option.category, state(false))
+        }
+      })
+      console.log('Initialized states for', configOptionStates.size, 'options')
+      console.log('Category states:', Array.from(categoryShown.keys()))
+
+      // Set the options AFTER states are initialized
+      configOptions.val = options
+      console.log('Set configOptions.val, length:', configOptions.val.length)
+    } else {
+      console.error('Failed to load config options:', configOptionsRes.status)
     }
   } catch (error) {
     console.error('Error loading firmware data:', error)
@@ -236,9 +283,23 @@ async function handleSubmit(e: Event): Promise<void> {
   errorMessage.val = ''
   downloadUrl.val = ''
 
-  const config = {
+  // Collect all configuration options dynamically
+  const meshtasticConfig: Record<string, boolean> = {}
+  configOptions.val.forEach((option) => {
+    const optionState = configOptionStates.get(option.key)
+    if (optionState && optionState.val) {
+      meshtasticConfig[option.key] = true
+    }
+  })
+
+  const config: Record<string, unknown> = {
     branch: currentBranch.val.trim(),
     environment: environment.val,
+  }
+
+  // Only include config if there are any options set
+  if (Object.keys(meshtasticConfig).length > 0) {
+    config.config = meshtasticConfig
   }
 
   try {
@@ -384,6 +445,236 @@ const App = () =>
             : option({ value: '', disabled: true }, 'Loading environments...')
         )
       ),
+      h3('Configuration Options'),
+      () => {
+        const count = configOptions.val.length
+        console.log('Render check - configOptions count:', count)
+        if (count === 0) {
+          return small('Loading configuration options...')
+        }
+        return null
+      },
+      // Render hierarchical options first (minimizeBuild)
+      () => {
+        // Access configOptions.val FIRST to establish dependency tracking
+        const opts = configOptions.val
+        const count = opts.length
+        console.log('Render hierarchical - configOptions count:', count)
+
+        if (count === 0) {
+          console.log('No config options')
+          return div() // Return empty div instead of null to maintain tracking
+        }
+
+        const hierarchicalOptions = opts.filter(
+          (opt) => opt.hierarchical && opt.category === 'system'
+        )
+        console.log('Found hierarchical options:', hierarchicalOptions.length)
+
+        if (hierarchicalOptions.length === 0) {
+          console.log('No hierarchical options')
+          return div() // Return empty div instead of null
+        }
+
+        const elements = hierarchicalOptions
+          .map((option) => {
+            const optionState = configOptionStates.get(option.key)
+            if (!optionState) return null
+            return div(
+              { style: 'margin-bottom: 1rem;' },
+              label(
+                {
+                  style:
+                    'display: flex; align-items: center; gap: 0.5rem; cursor: pointer;',
+                },
+                input({
+                  type: 'checkbox',
+                  checked: optionState,
+                  onchange: (e: Event) => {
+                    const target = e.target as HTMLInputElement
+                    optionState.val = target.checked
+                    // When hierarchical option is checked, enable all implied options
+                    if (target.checked && option.implies) {
+                      option.implies.forEach((impliedKey) => {
+                        const impliedState = configOptionStates.get(impliedKey)
+                        if (impliedState) {
+                          impliedState.val = true
+                        }
+                      })
+                    }
+                  },
+                }),
+                span(
+                  { style: 'font-weight: bold;' },
+                  option.name,
+                  option.description
+                    ? small(
+                        {
+                          style:
+                            'display: block; font-weight: normal; opacity: 0.7;',
+                        },
+                        option.description
+                      )
+                    : null
+                )
+              )
+            )
+          })
+          .filter((el) => el !== null)
+
+        console.log('Hierarchical options:', elements)
+
+        if (elements.length === 0) {
+          console.log('No hierarchical options')
+          return div() // Return empty div instead of null
+        }
+        return div({}, ...elements)
+      },
+      // Render collapsible sections for each category
+      () => {
+        if (configOptions.val.length === 0) return div() // Return empty div instead of null
+
+        const categoryTitles: Record<string, string> = {
+          feature: 'Feature Toggles',
+          system: 'System-Level Exclusions',
+          module: 'Module Exclusions',
+        }
+
+        const categories = ['feature', 'system', 'module'].filter((cat) =>
+          configOptions.val.some(
+            (opt) => opt.category === cat && !opt.hierarchical
+          )
+        )
+
+        if (categories.length === 0) return div() // Return empty div instead of null
+
+        const categoryElements = categories
+          .map((category) => {
+            let shownState = categoryShown.get(category)
+            if (!shownState) {
+              // Create state if it doesn't exist (shouldn't happen, but safety check)
+              shownState = state(false)
+              categoryShown.set(category, shownState)
+            }
+
+            // Note: categoryOptions is now computed inside the reactive function
+            // to ensure it tracks configOptions.val changes
+            return div(
+              {
+                style:
+                  'margin-bottom: 1rem; border: 1px solid #ddd; padding: 0.5rem; border-radius: 4px;',
+              },
+              button(
+                {
+                  type: 'button',
+                  onclick: () => {
+                    shownState.val = !shownState.val
+                  },
+                  style:
+                    'width: 100%; text-align: left; background: none; border: none; padding: 0.5rem; cursor: pointer; font-weight: bold;',
+                },
+                () => (shownState.val ? '▼ ' : '▶ ') + categoryTitles[category]
+              ),
+              () => {
+                if (!shownState.val) return div() // Return empty div instead of null
+
+                // Access configOptions.val directly inside the reactive function to track changes
+                const opts = configOptions.val
+
+                // Build array of elements to render
+                const elements: (HTMLElement | null)[] = []
+
+                // Render hierarchical module option first if category is module
+                if (category === 'module') {
+                  const hierarchicalModuleOptions = opts
+                    .filter(
+                      (opt) => opt.category === category && opt.hierarchical
+                    )
+                    .map((option) => {
+                      const optionState = configOptionStates.get(option.key)
+                      if (!optionState) return null
+                      return label(
+                        {
+                          style:
+                            'display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; cursor: pointer;',
+                        },
+                        input({
+                          type: 'checkbox',
+                          checked: optionState,
+                          onchange: (e: Event) => {
+                            const target = e.target as HTMLInputElement
+                            optionState.val = target.checked
+                            // When hierarchical option is checked, enable all implied options
+                            if (target.checked && option.implies) {
+                              option.implies.forEach((impliedKey) => {
+                                const impliedState =
+                                  configOptionStates.get(impliedKey)
+                                if (impliedState) {
+                                  impliedState.val = true
+                                }
+                              })
+                            }
+                          },
+                        }),
+                        span({ style: 'font-weight: bold;' }, option.name)
+                      )
+                    })
+                    .filter((el) => el !== null)
+                  elements.push(...(hierarchicalModuleOptions as HTMLElement[]))
+                }
+
+                // Render regular options - filter from opts directly, not categoryOptions
+                const categoryOptions = opts.filter(
+                  (opt) => opt.category === category && !opt.hierarchical
+                )
+                const regularOptions = categoryOptions
+                  .map((option) => {
+                    const optionState = configOptionStates.get(option.key)
+                    if (!optionState) return null
+                    return label(
+                      {
+                        style:
+                          'display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; cursor: pointer;',
+                      },
+                      input({
+                        type: 'checkbox',
+                        checked: optionState,
+                        onchange: (e: Event) => {
+                          optionState.val = (
+                            e.target as HTMLInputElement
+                          ).checked
+                        },
+                      }),
+                      span(
+                        option.name,
+                        option.description
+                          ? small(
+                              {
+                                style:
+                                  'display: block; font-weight: normal; opacity: 0.7; font-size: 0.9em; margin-left: 1.5rem;',
+                              },
+                              option.description
+                            )
+                          : null
+                      )
+                    )
+                  })
+                  .filter((el) => el !== null) as HTMLElement[]
+
+                elements.push(...regularOptions)
+
+                return div(
+                  { style: 'margin-top: 0.5rem; padding-left: 1rem;' },
+                  ...elements
+                )
+              }
+            )
+          })
+          .filter((el) => el !== null) as HTMLElement[]
+
+        if (categoryElements.length === 0) return div() // Return empty div instead of null
+        return div({}, ...categoryElements)
+      },
       button({ type: 'submit' }, 'Start Build')
     ),
     () =>

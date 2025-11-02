@@ -12,6 +12,7 @@ import {
   validateRef,
   getEnvironments,
 } from './firmware-info'
+import { CONFIG_OPTIONS } from './config-options'
 
 const app = new Hono()
 
@@ -90,6 +91,20 @@ app.get('/firmware/environments', async (c) => {
   try {
     const environments = await getEnvironments()
     return c.json(environments)
+  } catch (error) {
+    return c.json(
+      {
+        error: error instanceof Error ? error.message : 'Unknown error',
+      },
+      500
+    )
+  }
+})
+
+// Get configuration options endpoint
+app.get('/config/options', async (c) => {
+  try {
+    return c.json(CONFIG_OPTIONS)
   } catch (error) {
     return c.json(
       {
