@@ -53,10 +53,10 @@ const server = Bun.serve({
 
     // SSE progress endpoint
     if (
-      url.pathname.startsWith('/api/build/') &&
+      url.pathname.startsWith('/build/') &&
       url.pathname.endsWith('/progress')
     ) {
-      const jobId = url.pathname.split('/')[3]
+      const jobId = url.pathname.split('/')[2]
 
       const encoder = new TextEncoder()
       const stream = new ReadableStream({
@@ -105,8 +105,8 @@ const server = Bun.serve({
     }
 
     // Job status endpoint
-    if (url.pathname.startsWith('/api/build/')) {
-      const jobId = url.pathname.split('/')[3]
+    if (url.pathname.startsWith('/build/')) {
+      const jobId = url.pathname.split('/')[2]
       const job = jobManager.getJob(jobId)
 
       if (!job) {
@@ -122,8 +122,8 @@ const server = Bun.serve({
     }
 
     // Download endpoint
-    if (url.pathname.startsWith('/api/download/')) {
-      const cacheKey = url.pathname.split('/')[3]
+    if (url.pathname.startsWith('/download/')) {
+      const cacheKey = url.pathname.split('/')[2]
       const cacheDir = `.buildcache/${cacheKey}`
 
       try {
