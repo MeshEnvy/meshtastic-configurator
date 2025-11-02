@@ -18,6 +18,10 @@ A web-based build service for Meshtastic firmware with a VanJS+PicoCSS frontend,
 - Job queue management using bottleneck for concurrent build limiting (max 2 concurrent builds)
 - Server-Sent Events (SSE) endpoint for build progress
 - Launches Docker worker processes for builds
+- Firmware repository management:
+  - Uses `api/firmware` as a git submodule (Meshtastic firmware repository)
+  - Automatically fetches latest changes every hour
+  - Provides endpoints for branches, tags, and build environments
 - Build artifact management:
   - Stores builds in `.buildcache` directory
   - Stable key hashing based on configuration settings array
@@ -40,6 +44,17 @@ A web-based build service for Meshtastic firmware with a VanJS+PicoCSS frontend,
 
 - Docker installed and running
 - Bun installed (https://bun.sh)
+- Git (for initializing the firmware repository submodule)
+
+### Initializing the Firmware Repository
+
+The firmware repository is included as a git submodule. Initialize it with:
+
+```bash
+git submodule update --init --recursive
+```
+
+This will clone the Meshtastic firmware repository into `api/firmware`.
 
 ### Building the Docker Worker
 
@@ -74,7 +89,11 @@ cd web
 bun --serve index.html
 ```
 
-The frontend expects the API to be available at `http://localhost:3000`. If you need to change this, update the `API_URL` in `web/index.html`.
+The frontend automatically detects the API URL based on the environment:
+- In development (localhost/127.0.0.1): Uses `http://localhost:3000`
+- In production: Uses `https://configurator-api.meshenvy.org`
+
+You can modify the `getApiUrl()` function in `web/src/main.ts` to change this behavior.
 
 ## Usage
 
@@ -105,10 +124,18 @@ Build configurations are specified as JSON with the following structure:
 
 ## API Endpoints
 
-- `POST /api/build` - Submit a build request
-- `GET /api/build/:id` - Get build job status
-- `GET /api/build/:id/progress` - SSE endpoint for build progress
-- `GET /api/download/:cacheKey` - Download built firmware
+### Firmware Information
+- `GET /firmware/branches` - Get list of available branches
+- `GET /firmware/tags` - Get list of available tags
+- `GET /firmware/latest-tag` - Get the latest tag
+- `POST /firmware/validate` - Validate a branch/tag/commit reference
+- `GET /firmware/environments` - Get list of available build environments
+
+### Build Management
+- `POST /build` - Submit a build request
+- `GET /build/:id` - Get build job status
+- `GET /build/:id/progress` - SSE endpoint for build progress
+- `GET /download/:cacheKey` - Download built firmware
 
 ## Build Cache
 
