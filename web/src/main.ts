@@ -318,6 +318,9 @@ async function handleSubmit(e: Event): Promise<void> {
 
     const job: BuildJob = await response.json()
 
+    // Always connect to SSE for progress updates
+    connectSSE(job.id)
+
     // If already completed (cached), show download immediately
     if (job.status === 'completed' && job.outputPath && job.cacheKey) {
       const url = `${API_URL}/download/${job.cacheKey}`
@@ -325,9 +328,6 @@ async function handleSubmit(e: Event): Promise<void> {
       showDownload.val = true
       showProgress.val = false
       buildStatus.val = 'completed'
-    } else {
-      // Otherwise connect to SSE for progress
-      connectSSE(job.id)
     }
   } catch (error) {
     errorMessage.val =
