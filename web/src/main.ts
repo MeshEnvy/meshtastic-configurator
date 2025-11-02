@@ -68,6 +68,7 @@ const showError = state(false)
 // Branch/tag state
 const branches = state<string[]>([])
 const tags = state<string[]>([])
+const environments = state<string[]>([])
 const selectedRefType = state<'dropdown' | 'custom'>('dropdown')
 const customRef = state('')
 const validationStatus = state<{
@@ -91,11 +92,13 @@ const statusDisplay = derive(() => {
 // Load firmware data on startup
 async function loadFirmwareData() {
   try {
-    const [branchesRes, tagsRes, latestTagRes] = await Promise.all([
-      fetch(`${API_URL}/firmware/branches`),
-      fetch(`${API_URL}/firmware/tags`),
-      fetch(`${API_URL}/firmware/latest-tag`),
-    ])
+    const [branchesRes, tagsRes, latestTagRes, environmentsRes] =
+      await Promise.all([
+        fetch(`${API_URL}/firmware/branches`),
+        fetch(`${API_URL}/firmware/tags`),
+        fetch(`${API_URL}/firmware/latest-tag`),
+        fetch(`${API_URL}/firmware/environments`),
+      ])
 
     if (branchesRes.ok) {
       branches.val = await branchesRes.json()
@@ -107,6 +110,17 @@ async function loadFirmwareData() {
       const { tag } = await latestTagRes.json()
       if (tag) {
         branch.val = tag
+      }
+    }
+    if (environmentsRes.ok) {
+      const envs = await environmentsRes.json()
+      environments.val = envs
+      // Set default environment to first one if available and no environment is currently selected
+      if (envs.length > 0) {
+        // Only set if current value is empty or not in the list
+        if (!environment.val || !envs.includes(environment.val)) {
+          environment.val = envs[0]
+        }
       }
     }
   } catch (error) {
@@ -356,8 +370,7 @@ const App = () =>
                 'Select from the dropdown, or choose "Custom" to type your own'
               )
       ),
-      label(
-        'Build Environment',
+      label('Build Environment', () =>
         select(
           {
             value: environment,
@@ -366,14 +379,9 @@ const App = () =>
               environment.val = target.value
             },
           },
-          option({ value: 'esp32dev' }, 'ESP32 Development Board'),
-          option({ value: 'tlora-v1' }, 'T-Beam v1'),
-          option({ value: 'tlora-v2' }, 'T-Beam v2'),
-          option({ value: 'tlora-v2-1-1.6' }, 'T-Beam v2.1.1.6'),
-          option({ value: 'heltec-v1' }, 'Heltec v1'),
-          option({ value: 'heltec-v2' }, 'Heltec v2'),
-          option({ value: 'heltec-v2.1' }, 'Heltec v2.1'),
-          option({ value: 'heltec-v3' }, 'Heltec v3')
+          environments.val.length > 0
+            ? environments.val.map((env) => option({ value: env }, env))
+            : option({ value: '', disabled: true }, 'Loading environments...')
         )
       ),
       button({ type: 'submit' }, 'Start Build')

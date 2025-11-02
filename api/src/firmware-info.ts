@@ -1,8 +1,8 @@
 import { spawn } from 'child_process'
-import { existsSync } from 'fs'
+import { existsSync, readFileSync, readdirSync } from 'fs'
 import { join } from 'path'
 
-const FIRMWARE_DIR = join(process.cwd(), 'firmware')
+const FIRMWARE_DIR = join(import.meta.dir, '..', 'firmware')
 
 interface GitRef {
   name: string
@@ -127,6 +127,87 @@ export async function validateRef(ref: string): Promise<{
     return { valid: true, type: 'tag' }
   } catch {
     return { valid: false, error: 'Branch, tag, or commit not found' }
+  }
+}
+
+// Recursively find all platformio.ini files
+function findPlatformioIniFiles(dir: string, fileList: string[] = []): string[] {
+  try {
+    const entries = readdirSync(dir, { withFileTypes: true })
+    for (const entry of entries) {
+      const fullPath = join(dir, entry.name)
+      if (entry.isDirectory()) {
+        // Skip certain directories
+        if (
+          entry.name === 'node_modules' ||
+          entry.name === '.git' ||
+          entry.name === '.pio' ||
+          entry.name === 'build'
+        ) {
+          continue
+        }
+        findPlatformioIniFiles(fullPath, fileList)
+      } else if (entry.isFile() && entry.name === 'platformio.ini') {
+        fileList.push(fullPath)
+      }
+    }
+  } catch (error) {
+    // Ignore permission errors and continue
+  }
+  return fileList
+}
+
+// Parse INI file and extract environment names from [env:...] sections
+function parseEnvironmentsFromIni(filePath: string): string[] {
+  try {
+    const content = readFileSync(filePath, 'utf-8')
+    const envRegex = /^\[env:([^\]]+)\]/gm
+    const environments: string[] = []
+    let match
+
+    while ((match = envRegex.exec(content)) !== null) {
+      environments.push(match[1])
+    }
+
+    return environments
+  } catch (error) {
+    console.error(`Error reading ${filePath}:`, error)
+    return []
+  }
+}
+
+export async function getEnvironments(): Promise<string[]> {
+  if (!existsSync(FIRMWARE_DIR)) {
+    return []
+  }
+
+  try {
+    // Ensure we're on develop branch
+    const currentBranch = await runGitCommand(['rev-parse', '--abbrev-ref', 'HEAD']).catch(
+      () => ''
+    )
+    if (currentBranch !== 'develop') {
+      // Fetch latest develop
+      await runGitCommand(['fetch', 'origin', 'develop'])
+      // Checkout develop
+      await runGitCommand(['checkout', 'develop'])
+    }
+
+    // Find all platformio.ini files
+    const iniFiles = findPlatformioIniFiles(FIRMWARE_DIR)
+    const allEnvironments = new Set<string>()
+
+    // Parse each INI file for environments
+    for (const iniFile of iniFiles) {
+      const envs = parseEnvironmentsFromIni(iniFile)
+      envs.forEach((env) => allEnvironments.add(env))
+    }
+
+    // Return sorted list
+    return Array.from(allEnvironments).sort()
+  } catch (error) {
+    console.error('Error fetching environments:', error)
+    return []
   }
 }
 

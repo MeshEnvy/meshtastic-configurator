@@ -10,6 +10,7 @@ import {
   getTags,
   getLatestTag,
   validateRef,
+  getEnvironments,
 } from './firmware-info'
 
 const app = new Hono()
@@ -74,6 +75,21 @@ app.post('/firmware/validate', async (c) => {
 
     const validation = await validateRef(ref)
     return c.json(validation)
+  } catch (error) {
+    return c.json(
+      {
+        error: error instanceof Error ? error.message : 'Unknown error',
+      },
+      500
+    )
+  }
+})
+
+// Get environments endpoint
+app.get('/firmware/environments', async (c) => {
+  try {
+    const environments = await getEnvironments()
+    return c.json(environments)
   } catch (error) {
     return c.json(
       {

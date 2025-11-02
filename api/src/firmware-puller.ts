@@ -2,7 +2,7 @@ import { spawn } from 'child_process'
 import { existsSync } from 'fs'
 import { join } from 'path'
 
-const FIRMWARE_DIR = join(process.cwd(), 'firmware')
+const FIRMWARE_DIR = join(import.meta.dir, '..', 'firmware')
 const PULL_INTERVAL_MS = 60 * 60 * 1000 // 1 hour
 
 async function pullFirmware(): Promise<void> {
