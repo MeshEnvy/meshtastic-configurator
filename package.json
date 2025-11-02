@@ -1,0 +1,9 @@
+{
+  "name": "meshtastic-configurator",
+  "private": true,
+  "workspaces": [
+    "api",
+    "worker",
+    "web"
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Meshtastic Build Configuration",
+  "type": "object",
+  "required": ["branch"],
+  "properties": {
+    "branch": {
+      "type": "string",
+      "description": "Git branch, tag, or commit hash to build from"
+    },
+    "environment": {
+      "type": "string",
+      "description": "PlatformIO environment name (e.g., esp32dev, tlora-v1, etc.)",
+      "default": "esp32dev"
+    },
+    "buildFlags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Additional build flags to pass to PlatformIO"
+    },
+    "features": {
+      "type": "object",
+      "description": "Feature flags and options",
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

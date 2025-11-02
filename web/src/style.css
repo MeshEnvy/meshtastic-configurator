@@ -1,0 +1,35 @@
+.progress-log {
+  background: #1e1e1e;
+  color: #d4d4d4;
+  padding: 1rem;
+  border-radius: 0.25rem;
+  max-height: 400px;
+  overflow-y: auto;
+  font-family: 'Courier New', monospace;
+  font-size: 0.875rem;
+}
+
+.progress-log .log-line {
+  margin: 0.25rem 0;
+}
+
+.status-queued {
+  color: #ffa500;
+}
+
+.status-building {
+  color: #00aaff;
+}
+
+.status-completed {
+  color: #00ff00;
+}
+
+.status-failed {
+  color: #ff4444;
+}
+
+.hidden {
+  display: none;
+}
+

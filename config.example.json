@@ -1,0 +1,6 @@
+{
+  "branch": "master",
+  "environment": "esp32dev",
+  "buildFlags": [],
+  "features": {}
+}
