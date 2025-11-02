@@ -1,0 +1,3 @@
+[submodule "api/firmware"]
+	path = api/firmware
+	url = git@github.com:meshtastic/firmware.git
