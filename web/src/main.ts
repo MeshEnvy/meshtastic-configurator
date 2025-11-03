@@ -493,12 +493,12 @@ const NewBuild = () =>
                   onchange: (e: Event) => {
                     const target = e.target as HTMLInputElement
                     optionState.val = target.checked
-                    // When hierarchical option is checked, enable all implied options
-                    if (target.checked && option.implies) {
+                    // When option with implications is checked/unchecked, update all implied options
+                    if (option.implies) {
                       option.implies.forEach((impliedKey) => {
                         const impliedState = configOptionStates.get(impliedKey)
                         if (impliedState) {
-                          impliedState.val = true
+                          impliedState.val = target.checked
                         }
                       })
                     }
@@ -598,13 +598,13 @@ const NewBuild = () =>
                           onchange: (e: Event) => {
                             const target = e.target as HTMLInputElement
                             optionState.val = target.checked
-                            // When hierarchical option is checked, enable all implied options
-                            if (target.checked && option.implies) {
+                            // When option with implications is checked/unchecked, update all implied options
+                            if (option.implies) {
                               option.implies.forEach((impliedKey) => {
                                 const impliedState =
                                   configOptionStates.get(impliedKey)
                                 if (impliedState) {
-                                  impliedState.val = true
+                                  impliedState.val = target.checked
                                 }
                               })
                             }

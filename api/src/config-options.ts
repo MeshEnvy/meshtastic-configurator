@@ -54,6 +54,7 @@ export const CONFIG_OPTIONS: ConfigOption[] = [
     name: 'Exclude GPS',
     description: 'Also excludes rangetest',
     category: 'system',
+    implies: ['excludeRangetest'],
   },
   {
     key: 'excludeScreen',
@@ -219,4 +220,3 @@ export const CONFIG_OPTIONS: ConfigOption[] = [
     category: 'module',
   },
 ]
-
