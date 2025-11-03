@@ -10,7 +10,8 @@
     "deploy": "bun run build && wrangler deploy"
   },
   "dependencies": {
-    "vanjs-core": "^1.6.0"
+    "vanjs-core": "^1.6.0",
+    "vanjs-router": "^2.1.4"
   },
   "devDependencies": {
     "typescript": "^5.9.3",

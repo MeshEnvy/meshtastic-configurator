@@ -1,7 +1,12 @@
 import van from 'vanjs-core'
 import './style.css'
+import { Route, goto } from 'vanjs-router'
 
 const {
+  nav,
+  ul,
+  li,
+  p,
   div,
   span,
   form,
@@ -17,6 +22,7 @@ const {
   h1,
   h2,
   h3,
+  hr,
 } = van.tags
 const { state, derive } = van
 
@@ -339,9 +345,8 @@ async function handleSubmit(e: Event): Promise<void> {
   }
 }
 
-const App = () =>
+const NewBuild = () =>
   div(
-    h1('Meshtastic Firmware Builder'),
     form(
       { onsubmit: handleSubmit },
       label(
@@ -398,8 +403,8 @@ const App = () =>
                     validationStatus.val && !validationStatus.val.valid
                       ? 'border-color: #ff4444;'
                       : validationStatus.val && validationStatus.val.valid
-                      ? 'border-color: #00ff00;'
-                      : ''
+                        ? 'border-color: #00ff00;'
+                        : ''
                   }`,
                 }),
                 button(
@@ -711,7 +716,38 @@ const App = () =>
         : null
   )
 
+const Home = () =>
+  div(
+    p(
+      'This is the Meshtastic Firmware Builder. It allows you to build firmware for your Meshtastic device.'
+    ),
+    p(
+      'You can select a branch, tag, or commit to build, and then select the configuration options you want to include.'
+    ),
+    p(
+      'Once you have selected your configuration options, you can click the "Start Build" button to start the build process.'
+    ),
+    p(
+      'The build process will take a few minutes, and you will be able to download the firmware file when it is complete.'
+    ),
+    button({ onclick: () => goto('new-build') }, 'New Build')
+  )
+
+const Layout = () =>
+  div(
+    nav(
+      ul(li(a({ href: '/' }, '🏠')), li(strong('Meshtastic Firmware Builder')))
+      // Do another ul() here to make right aligned links
+    ),
+    hr(),
+    div(
+      { id: 'app' },
+      Route({ rule: 'home', Loader: Home }),
+      Route({ rule: 'new-build', Loader: NewBuild })
+    )
+  )
+
 const appElement = document.getElementById('app')
 if (appElement) {
-  van.add(appElement, App())
+  van.add(appElement, Layout())
 }
