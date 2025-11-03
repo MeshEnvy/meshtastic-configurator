@@ -11,6 +11,7 @@ import {
   getLatestTag,
   validateRef,
   getEnvironments,
+  getEnvironmentConfigDefaults,
 } from './firmware-info'
 import { CONFIG_OPTIONS } from './config-options'
 
@@ -91,6 +92,22 @@ app.get('/firmware/environments', async (c) => {
   try {
     const environments = await getEnvironments()
     return c.json(environments)
+  } catch (error) {
+    return c.json(
+      {
+        error: error instanceof Error ? error.message : 'Unknown error',
+      },
+      500
+    )
+  }
+})
+
+// Get environment config defaults endpoint
+app.get('/firmware/environments/:name/config', async (c) => {
+  try {
+    const envName = c.req.param('name')
+    const defaults = await getEnvironmentConfigDefaults(envName)
+    return c.json(defaults)
   } catch (error) {
     return c.json(
       {

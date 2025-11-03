@@ -100,6 +100,8 @@ interface ConfigOption {
 }
 const configOptions = state<ConfigOption[]>([])
 const configOptionStates = new Map<string, ReturnType<typeof state<boolean>>>()
+const hardExclusions = state<Set<string>>(new Set())
+const environmentConfigLoaded = state(false)
 
 let eventSource: EventSource | null = null
 let validationTimeout: ReturnType<typeof setTimeout> | null = null
@@ -181,6 +183,66 @@ async function loadFirmwareData() {
     console.error('Error loading firmware data:', error)
   }
 }
+
+// Load environment config defaults
+async function loadEnvironmentConfig(envName: string) {
+  if (!envName) {
+    environmentConfigLoaded.val = false
+    hardExclusions.val = new Set()
+    // Reset all checkboxes when no environment is selected
+    configOptionStates.forEach((optionState) => {
+      optionState.val = false
+    })
+    return
+  }
+
+  try {
+    // Reset all checkboxes first
+    configOptionStates.forEach((optionState) => {
+      optionState.val = false
+    })
+
+    const response = await fetch(
+      `${API_URL}/firmware/environments/${envName}/config`
+    )
+    if (!response.ok) {
+      console.error(`Failed to load config for ${envName}:`, response.status)
+      environmentConfigLoaded.val = false
+      return
+    }
+
+    const { config, hardExclusions: hardExcl } = await response.json()
+    console.log(
+      `Loaded config for ${envName}:`,
+      config,
+      'Hard exclusions:',
+      hardExcl
+    )
+
+    // Update hard exclusions
+    hardExclusions.val = new Set(hardExcl || [])
+
+    // Pre-fill config option states based on environment defaults
+    Object.entries(config || {}).forEach(([key, value]) => {
+      const optionState = configOptionStates.get(key)
+      if (optionState && typeof value === 'boolean') {
+        optionState.val = value
+      }
+    })
+
+    environmentConfigLoaded.val = true
+  } catch (error) {
+    console.error(`Error loading config for ${envName}:`, error)
+    environmentConfigLoaded.val = false
+  }
+}
+
+// Load config for initial environment after data loads
+setTimeout(() => {
+  if (environment.val) {
+    loadEnvironmentConfig(environment.val)
+  }
+}, 1000)
 
 // Get the current branch value (either from dropdown or custom input)
 const currentBranch = derive(() => {
@@ -440,9 +502,11 @@ const NewBuild = () =>
         select(
           {
             value: environment,
-            onchange: (e: Event) => {
+            onchange: async (e: Event) => {
               const target = e.target as HTMLSelectElement
               environment.val = target.value
+              // Load config defaults when environment changes
+              await loadEnvironmentConfig(target.value)
             },
           },
           environments.val.length > 0
@@ -450,17 +514,46 @@ const NewBuild = () =>
             : option({ value: '', disabled: true }, 'Loading environments...')
         )
       ),
+      () => {
+        // Show message if no environment is selected
+        if (!environment.val) {
+          return div(
+            {
+              style:
+                'padding: 1rem; background: #f0f0f0; border-radius: 4px; margin: 1rem 0;',
+            },
+            small('Please select a build environment to configure options.')
+          )
+        }
+        // Show loading message while config is being loaded
+        if (!environmentConfigLoaded.val) {
+          return div(
+            {
+              style:
+                'padding: 1rem; background: #f0f0f0; border-radius: 4px; margin: 1rem 0;',
+            },
+            small(`Loading configuration defaults for ${environment.val}...`)
+          )
+        }
+        return null
+      },
       h3('Configuration Options'),
       () => {
         const count = configOptions.val.length
         console.log('Render check - configOptions count:', count)
-        if (count === 0) {
-          return small('Loading configuration options...')
+        // Only show config options if environment is selected and config is loaded
+        if (count === 0 || !environment.val || !environmentConfigLoaded.val) {
+          return null
         }
         return null
       },
       // Render hierarchical options first (minimizeBuild)
       () => {
+        // Only show if environment is selected and config is loaded
+        if (!environment.val || !environmentConfigLoaded.val) {
+          return div()
+        }
+
         // Access configOptions.val FIRST to establish dependency tracking
         const opts = configOptions.val
         const count = opts.length
@@ -485,19 +578,28 @@ const NewBuild = () =>
           .map((option) => {
             const optionState = configOptionStates.get(option.key)
             if (!optionState) return null
+            const isHardExcluded = hardExclusions.val.has(option.key)
             return div(
               label(
                 input({
                   type: 'checkbox',
                   checked: optionState,
+                  disabled: isHardExcluded,
+                  style: isHardExcluded
+                    ? 'opacity: 0.5; cursor: not-allowed;'
+                    : '',
                   onchange: (e: Event) => {
                     const target = e.target as HTMLInputElement
+                    if (isHardExcluded) return // Don't allow changes to hard-excluded options
                     optionState.val = target.checked
                     // When option with implications is checked/unchecked, update all implied options
                     if (option.implies) {
                       option.implies.forEach((impliedKey) => {
                         const impliedState = configOptionStates.get(impliedKey)
-                        if (impliedState) {
+                        if (
+                          impliedState &&
+                          !hardExclusions.val.has(impliedKey)
+                        ) {
                           impliedState.val = target.checked
                         }
                       })
@@ -506,6 +608,12 @@ const NewBuild = () =>
                 }),
                 strong(
                   option.name,
+                  isHardExcluded
+                    ? small(
+                        { style: 'opacity: 0.7;' },
+                        ' (locked by environment)'
+                      )
+                    : null,
                   option.description
                     ? small(
                         {
@@ -530,6 +638,11 @@ const NewBuild = () =>
       },
       // Render collapsible sections for each category
       () => {
+        // Only show if environment is selected and config is loaded
+        if (!environment.val || !environmentConfigLoaded.val) {
+          return div()
+        }
+
         if (configOptions.val.length === 0) return div() // Return empty div instead of null
 
         const categoryTitles: Record<string, string> = {
@@ -591,26 +704,43 @@ const NewBuild = () =>
                     .map((option) => {
                       const optionState = configOptionStates.get(option.key)
                       if (!optionState) return null
+                      const isHardExcluded = hardExclusions.val.has(option.key)
                       return label(
                         input({
                           type: 'checkbox',
                           checked: optionState,
+                          disabled: isHardExcluded,
+                          style: isHardExcluded
+                            ? 'opacity: 0.5; cursor: not-allowed;'
+                            : '',
                           onchange: (e: Event) => {
                             const target = e.target as HTMLInputElement
+                            if (isHardExcluded) return // Don't allow changes to hard-excluded options
                             optionState.val = target.checked
                             // When option with implications is checked/unchecked, update all implied options
                             if (option.implies) {
                               option.implies.forEach((impliedKey) => {
                                 const impliedState =
                                   configOptionStates.get(impliedKey)
-                                if (impliedState) {
+                                if (
+                                  impliedState &&
+                                  !hardExclusions.val.has(impliedKey)
+                                ) {
                                   impliedState.val = target.checked
                                 }
                               })
                             }
                           },
                         }),
-                        strong(option.name)
+                        strong(
+                          option.name,
+                          isHardExcluded
+                            ? small(
+                                { style: 'opacity: 0.7;' },
+                                ' (locked by environment)'
+                              )
+                            : null
+                        )
                       )
                     })
                     .filter((el) => el !== null)
@@ -625,11 +755,17 @@ const NewBuild = () =>
                   .map((option) => {
                     const optionState = configOptionStates.get(option.key)
                     if (!optionState) return null
+                    const isHardExcluded = hardExclusions.val.has(option.key)
                     return label(
                       input({
                         type: 'checkbox',
                         checked: optionState,
+                        disabled: isHardExcluded,
+                        style: isHardExcluded
+                          ? 'opacity: 0.5; cursor: not-allowed;'
+                          : '',
                         onchange: (e: Event) => {
+                          if (isHardExcluded) return // Don't allow changes to hard-excluded options
                           optionState.val = (
                             e.target as HTMLInputElement
                           ).checked
@@ -637,6 +773,12 @@ const NewBuild = () =>
                       }),
                       span(
                         option.name,
+                        isHardExcluded
+                          ? small(
+                              { style: 'opacity: 0.7;' },
+                              ' (locked by environment)'
+                            )
+                          : null,
                         option.description
                           ? small(
                               {
